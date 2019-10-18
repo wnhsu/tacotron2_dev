@@ -1,3 +1,4 @@
+import numpy as np
 import random
 import torch
 from tensorboardX import SummaryWriter
@@ -16,9 +17,12 @@ class Tacotron2Logger(SummaryWriter):
             self.add_scalar("learning.rate", learning_rate, iteration)
             self.add_scalar("duration", duration, iteration)
 
-    def log_validation(self, reduced_loss, model, y, y_pred, iteration):
+    def log_validation(self, reduced_loss, model, y, y_pred, y_inf, iteration):
         self.add_scalar("validation.loss", reduced_loss, iteration)
-        _, mel_outputs, gate_outputs, alignments = y_pred
+        _, tf_mel_outputs, tf_gate_outputs, tf_alignments = y_pred
+        _, inf_mel_outputs, _, inf_alignments = y_inf
+        inf_mel_outputs = inf_mel_outputs.float()
+        inf_alignments = inf_alignments.float()
         mel_targets, gate_targets = y
 
         # plot distribution of parameters
@@ -27,22 +31,30 @@ class Tacotron2Logger(SummaryWriter):
             self.add_histogram(tag, value.data.cpu().numpy(), iteration)
 
         # plot alignment, mel target and predicted, gate target and predicted
-        idx = random.randint(0, alignments.size(0) - 1)
+        idx = 0  # random.randint(0, alignments.size(0) - 1)
         self.add_image(
-            "alignment",
-            plot_alignment_to_numpy(alignments[idx].data.cpu().numpy().T),
-            iteration)
-        self.add_image(
-            "mel_target",
+            "gt/mel_target",
             plot_spectrogram_to_numpy(mel_targets[idx].data.cpu().numpy()),
-            iteration)
+            iteration, dataformats='HWC')
         self.add_image(
-            "mel_predicted",
-            plot_spectrogram_to_numpy(mel_outputs[idx].data.cpu().numpy()),
-            iteration)
+            "tf/alignment",
+            plot_alignment_to_numpy(tf_alignments[idx].data.cpu().numpy().T),
+            iteration, dataformats='HWC')
         self.add_image(
-            "gate",
+            "tf/mel_predicted",
+            plot_spectrogram_to_numpy(tf_mel_outputs[idx].data.cpu().numpy()),
+            iteration, dataformats='HWC')
+        self.add_image(
+            "tf/gate",
             plot_gate_outputs_to_numpy(
                 gate_targets[idx].data.cpu().numpy(),
-                torch.sigmoid(gate_outputs[idx]).data.cpu().numpy()),
-            iteration)
+                torch.sigmoid(tf_gate_outputs[idx]).data.cpu().numpy()),
+            iteration, dataformats='HWC')
+        self.add_image(
+            "inf/alignment",
+            plot_alignment_to_numpy(inf_alignments[idx].data.cpu().numpy().T),
+            iteration, dataformats='HWC')
+        self.add_image(
+            "inf/mel_predicted",
+            plot_spectrogram_to_numpy(inf_mel_outputs[idx].data.cpu().numpy()),
+            iteration, dataformats='HWC')
