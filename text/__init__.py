@@ -40,6 +40,23 @@ def text_to_sequence(text, cleaner_names):
   return sequence
 
 
+def code_to_sequence(code, code_dict, collapse_code):
+    code = code.split()
+    if collapse_code:
+        prev_c = None
+        sequence = []
+        for c in code:
+            if c in code_dict and c != prev_c:
+                sequence.append(code_dict[c])
+                prev_c = c
+    else:
+        sequence = [code_dict[c] for c in code if c in code_dict]
+        if len(sequence) < 0.95 * len(code):
+            print('WARNING : over 5%% codes are OOV')
+
+    return sequence
+
+
 def sequence_to_text(sequence):
   '''Converts a sequence of IDs back to a string'''
   result = ''
@@ -51,6 +68,12 @@ def sequence_to_text(sequence):
         s = '{%s}' % s[1:]
       result += s
   return result.replace('}{', ' ')
+
+
+def sequence_to_code(sequence, code_dict):
+    '''Analogous to sequence_to_text'''
+    id_to_code = {i: c for c, i in code_dict.items()}
+    return ' '.join([id_to_code[i] for i in sequence])
 
 
 def _clean_text(text, cleaner_names):

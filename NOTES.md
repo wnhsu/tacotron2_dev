@@ -30,12 +30,8 @@ srun --gres=gpu:2 -p sm,2080,titanx \
   --hparams=batch_size=40,fp16_run=True,distributed_run=True
 ```
 
-## TODOs
-
-### Features to add
+### Feature TODOs
 * Save audio samples at each checkpoint
-* change filelist to be list of json. Each entry has additional fields
-  including speaker-id, duration, text, raw code (uncollapsed).
 * Initialize code/text embedding
 * pass speaker ID as input to the model
 * infer global voice representations with an audio encoder
@@ -44,6 +40,10 @@ srun --gres=gpu:2 -p sm,2080,titanx \
   * random audio/code chunking
   * silence removal
 
-### Experiments
+#### Completed
+* change filelist to be list of json. Each entry has additional fields
+  including speaker-id, duration, text, raw code (uncollapsed).
+
+### Experiment TODOs
 1. Train on LJSpeech with the original code
 2. Add speaker 
