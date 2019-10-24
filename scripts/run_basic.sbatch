@@ -1,5 +1,5 @@
 #!/bin/bash 
-#SBATCH --partition=titanx,2080,sm
+#SBATCH --partition=titanx,2080
 #SBATCH --gres=gpu:2
 #SBATCH -c 4
 #SBATCH -n 1
