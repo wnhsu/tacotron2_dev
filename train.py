@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import argparse
 import math
@@ -279,7 +280,9 @@ if __name__ == '__main__':
                         required=False, help='comma separated name=value pairs')
 
     args = parser.parse_args()
-    hparams = create_hparams(args.hparams)
+    hparams = create_hparams(args.hparams, verbose=True)
+    with open('%s/args.json' % args.output_directory, 'w') as f:
+        json.dump(vars(hparams), f, indent=2)
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark

@@ -1,99 +1,121 @@
-import tensorflow as tf
+import argparse
+import re
 from text import symbols
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def create_hparams(hparams_string=None, verbose=False):
-    """Create model hyperparameters. Parse nondefault from given string."""
+def create_parser():
+    parser = argparse.ArgumentParser(add_help=False)
+    
+    ################################
+    # Experiment Parameters        #
+    ################################
+    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--iters_per_checkpoint', type=int, default=1000)
+    parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--dynamic_loss_scaling', type=str2bool, default=True)
+    parser.add_argument('--fp16_run', type=str2bool, default=False)
+    parser.add_argument('--distributed_run', type=str2bool, default=False)
+    parser.add_argument('--dist_backend', type=str, default='nccl')
+    parser.add_argument('--dist_url', type=str, default='tcp://localhost:54321')
+    parser.add_argument('--cudnn_enabled', type=str2bool, default=True)
+    parser.add_argument('--cudnn_benchmark', type=str2bool, default=False)
+    parser.add_argument('--ignore_layers', type=str, nargs='*', 
+                        default=['embedding.weight'])
+    
+    ################################
+    # Data Parameters             #
+    ################################
+    parser.add_argument('--load_mel_from_disk', type=str2bool, default=False)
+    parser.add_argument('--training_files', type=str, 
+                        default='filelists/ljs_audio_text_train_filelist.txt')
+    parser.add_argument('--validation_files', type=str, 
+                        default='filelists/ljs_audio_text_val_filelist.txt')
+    parser.add_argument('--text_cleaners', type=str, nargs='*', 
+                        default=['english_cleaners'])
+    parser.add_argument('--text_or_code', type=str, default='text')
+    parser.add_argument('--code_key', type=str, default='')
+    parser.add_argument('--code_dict', type=str, default='')
+    parser.add_argument('--collapse_code', type=str2bool, default=True)
 
-    hparams = tf.contrib.training.HParams(
-        ################################
-        # Experiment Parameters        #
-        ################################
-        epochs=500,
-        iters_per_checkpoint=1000,
-        seed=1234,
-        dynamic_loss_scaling=True,
-        fp16_run=False,
-        distributed_run=False,
-        dist_backend="nccl",
-        dist_url="tcp://localhost:54321",
-        cudnn_enabled=True,
-        cudnn_benchmark=False,
-        ignore_layers=['embedding.weight'],
+    ################################
+    # Audio Parameters             #
+    ################################
+    parser.add_argument('--max_wav_value', type=float, default=32768.0)
+    parser.add_argument('--sampling_rate', type=int, default=22050)
+    parser.add_argument('--filter_length', type=int, default=1024)
+    parser.add_argument('--hop_length', type=int, default=256)
+    parser.add_argument('--win_length', type=int, default=1024)
+    parser.add_argument('--n_mel_channels', type=int, default=80)
+    parser.add_argument('--mel_fmin', type=float, default=0.0)
+    parser.add_argument('--mel_fmax', type=float, default=8000.0)
+    
+    ################################
+    # Model Parameters             #
+    ################################
+    parser.add_argument('--n_symbols', type=int, default=len(symbols))
+    parser.add_argument('--symbols_embedding_dim', type=int, default=512)
+    parser.add_argument('--symbols_embedding_path', type=str, default='')
+    
+    # Encoder parameters
+    parser.add_argument('--encoder_kernel_size', type=int, default=5)
+    parser.add_argument('--encoder_n_convolutions', type=int, default=3)
+    parser.add_argument('--encoder_embedding_dim', type=int, default=512)
+    
+    # Decoder parameters
+    parser.add_argument('--n_frames_per_step', type=int, default=1)
+    parser.add_argument('--decoder_rnn_dim', type=int, default=1024)
+    parser.add_argument('--prenet_dim', type=int, default=256)
+    parser.add_argument('--max_decoder_steps', type=int, default=1000)
+    parser.add_argument('--gate_threshold', type=float, default=0.5)
+    parser.add_argument('--p_attention_dropout', type=float, default=0.1)
+    parser.add_argument('--p_decoder_dropout', type=float, default=0.1)
 
-        ################################
-        # Data Parameters             #
-        ################################
-        load_mel_from_disk=False,
-        training_files='filelists/ljs_audio_text_train_filelist.txt',
-        validation_files='filelists/ljs_audio_text_val_filelist.txt',
-        text_cleaners=['english_cleaners'],
-        text_or_code='text',
-        code_dict='',  # one line per code, required if code is used
-        collapse_code=True,
+    # Attention parameters
+    parser.add_argument('--attention_rnn_dim', type=int, default=1024)
+    parser.add_argument('--attention_dim', type=int, default=128)
+    
+    # Location Layer parameters
+    parser.add_argument('--attention_location_n_filters', type=int, default=32)
+    parser.add_argument('--attention_location_kernel_size', type=int, default=31)
+    
+    # Mel-post processing network parameters
+    parser.add_argument('--postnet_embedding_dim', type=int, default=512)
+    parser.add_argument('--postnet_kernel_size', type=int, default=5)
+    parser.add_argument('--postnet_n_convolutions', type=int, default=5)
 
-        ################################
-        # Audio Parameters             #
-        ################################
-        max_wav_value=32768.0,
-        sampling_rate=22050,
-        filter_length=1024,
-        hop_length=256,
-        win_length=1024,
-        n_mel_channels=80,
-        mel_fmin=0.0,
-        mel_fmax=8000.0,
+    ################################
+    # Optimization Hyperparameters #
+    ################################
+    parser.add_argument('--use_saved_learning_rate', type=str2bool, default=False)
+    parser.add_argument('--learning_rate', type=float, default=1e-3)
+    parser.add_argument('--weight_decay', type=float, default=1e-6)
+    parser.add_argument('--grad_clip_thresh', type=float, default=1.0)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--mask_padding', type=str2bool, default=True)
+    return parser
 
-        ################################
-        # Model Parameters             #
-        ################################
-        n_symbols=len(symbols),
-        symbols_embedding_dim=512,
-        symbols_embedding_path="",  # one embedding per line, not include _pad
-
-        # Encoder parameters
-        encoder_kernel_size=5,
-        encoder_n_convolutions=3,
-        encoder_embedding_dim=512,
-
-        # Decoder parameters
-        n_frames_per_step=1,  # currently only 1 is supported
-        decoder_rnn_dim=1024,
-        prenet_dim=256,
-        max_decoder_steps=1000,
-        gate_threshold=0.5,
-        p_attention_dropout=0.1,
-        p_decoder_dropout=0.1,
-
-        # Attention parameters
-        attention_rnn_dim=1024,
-        attention_dim=128,
-
-        # Location Layer parameters
-        attention_location_n_filters=32,
-        attention_location_kernel_size=31,
-
-        # Mel-post processing network parameters
-        postnet_embedding_dim=512,
-        postnet_kernel_size=5,
-        postnet_n_convolutions=5,
-
-        ################################
-        # Optimization Hyperparameters #
-        ################################
-        use_saved_learning_rate=False,
-        learning_rate=1e-3,
-        weight_decay=1e-6,
-        grad_clip_thresh=1.0,
-        batch_size=64,
-        mask_padding=True  # set model's padded outputs to padded values
-    )
-
+def create_hparams(hparams_string='', verbose=False):
+    parser = create_parser()
+    hparams_string = re.sub(r'([^=,]*=)', r'--\1', hparams_string)
+    tokens = hparams_string.replace(',', ' ').replace('=', ' ').split()
+    argv = [v for v in tokens if bool(v)]
+    args = parser.parse_args(argv)
+    
     if hparams_string:
-        tf.logging.info('Parsing command line hparams: %s', hparams_string)
-        hparams.parse(hparams_string)
+        print('Parsing command line hparams: %s' % hparams_string)
 
     if verbose:
-        tf.logging.info('Final parsed hparams: %s', hparams.values())
+        print('Final parsed hparams:')
+        for k in vars(args):
+            print('%-40s : %s' % (k, getattr(args, k)))
 
-    return hparams
+    return args
