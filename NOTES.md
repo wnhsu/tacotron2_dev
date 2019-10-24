@@ -31,18 +31,16 @@ srun --gres=gpu:2 -p sm,2080,titanx \
 ```
 
 ### Feature TODOs
-* Save audio samples at each checkpoint
+* silence removal
 * Initialize code/text embedding
 * pass speaker ID as input to the model
 * infer global voice representations with an audio encoder
 * AE/VAE/GST/GMVAE formulation for the objective
-* data proprocessing
-  * random audio/code chunking
-  * silence removal
 
 #### Completed
 * change filelist to be list of json. Each entry has additional fields
   including speaker-id, duration, text, raw code (uncollapsed).
+* random audio/code chunking
 
 ### Experiment TODOs
 1. Train on LJSpeech with the original code

@@ -185,6 +185,8 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
 
     logger = prepare_directories_and_logger(
         output_directory, log_directory, rank)
+    with open('%s/args.json' % output_directory, 'w') as f:
+        json.dump(vars(hparams), f, indent=2)
 
     train_loader, valset, collate_fn = prepare_dataloaders(hparams)
 
@@ -208,6 +210,9 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     # ================ MAIN TRAINNIG LOOP! ===================
     for epoch in range(epoch_offset, hparams.epochs):
         print("Epoch: {}".format(epoch))
+        if hparams.text_or_code == 'code' and hparams.chunk_code:
+            max_chunk_size = hparams.init_chunk + epoch * hparams.chunk_incr
+            train_loader.dataset.set_max_raw_codes(max_chunk_size)
         nbatches = len(train_loader)
         for i, batch in enumerate(train_loader):
             start = time.perf_counter()
@@ -281,8 +286,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     hparams = create_hparams(args.hparams, verbose=True)
-    with open('%s/args.json' % args.output_directory, 'w') as f:
-        json.dump(vars(hparams), f, indent=2)
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark

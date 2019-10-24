@@ -5,7 +5,7 @@ import torch.utils.data
 
 import layers
 from utils import load_wav_to_torch, load_filepaths_and_text, load_code_dict
-from text import text_to_sequence, code_to_sequence
+from text import text_to_sequence, code_to_sequence, sample_code_chunk
 
 
 class TextMelLoader(torch.utils.data.Dataset):
@@ -21,6 +21,8 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.code_key = hparams.code_key
         self.code_dict = load_code_dict(hparams.code_dict)
         self.collapse_code = hparams.collapse_code
+        self.chunk_code = hparams.chunk_code
+        self.max_raw_codes = -1
         self.max_wav_value = hparams.max_wav_value
         self.sampling_rate = hparams.sampling_rate
         self.load_mel_from_disk = hparams.load_mel_from_disk
@@ -31,14 +33,32 @@ class TextMelLoader(torch.utils.data.Dataset):
         random.seed(1234)
         random.shuffle(self.data)
 
+    def set_max_raw_codes(self, max_raw_codes):
+        assert(self.text_or_code == 'code')
+        print('Changing max code-chunk size from %d to %d' % (
+              self.max_raw_codes, max_raw_codes))
+        self.max_raw_codes = max_raw_codes
+
     def get_mel_symbol_pair(self, datum):
         if self.text_or_code == 'text':
             symbol = self.get_text(datum['text'])
         elif self.text_or_code == 'code':
-            symbol = self.get_code(datum[self.code_key])
+            code = datum[self.code_key].split()
+            if self.chunk_code:
+                tot = len(code)
+                code, start, end = sample_code_chunk(code, self.max_raw_codes)
+            symbol = self.get_code(code)
         else:
             raise ValueError('%s not supported' % self.text_or_code)
+
         mel = self.get_mel(datum['audio'])
+        if self.text_or_code == 'code' and self.chunk_code:
+            fpc = float(mel.size(1)) / tot
+            fstart = int(np.floor(start * fpc))
+            fend = int(np.ceil(end * fpc))
+            assert(fstart != fend)
+            mel = mel[:, fstart:fend]
+
         return (symbol, mel)
 
     def get_mel(self, filename):

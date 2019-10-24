@@ -45,6 +45,10 @@ def create_parser():
     parser.add_argument('--code_key', type=str, default='')
     parser.add_argument('--code_dict', type=str, default='')
     parser.add_argument('--collapse_code', type=str2bool, default=True)
+    parser.add_argument('--chunk_code', type=str2bool, default=False)
+    parser.add_argument('--init_chunk', type=int, default=50, help='initial chunk size')
+    parser.add_argument('--chunk_incr', type=int, default=5, help='chunk size to increase at every epoch')
+
 
     ################################
     # Audio Parameters             #

@@ -1,4 +1,5 @@
 """ from https://github.com/keithito/tacotron """
+import numpy as np
 import re
 from text import cleaners
 from text.symbols import symbols
@@ -40,8 +41,15 @@ def text_to_sequence(text, cleaner_names):
   return sequence
 
 
+def sample_code_chunk(code, num):
+    if num < 0 or len(code) <= num:
+        return code, 0, len(code)
+    start = np.random.randint(len(code) - num + 1)
+    end = start + num
+    return code[start:end], start, end
+
+
 def code_to_sequence(code, code_dict, collapse_code):
-    code = code.split()
     if collapse_code:
         prev_c = None
         sequence = []
