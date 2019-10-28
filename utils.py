@@ -1,7 +1,8 @@
 import json
+import librosa
 import numpy as np
-from scipy.io.wavfile import read
 import torch
+from scipy.io.wavfile import read
 
 
 def get_mask_from_lengths(lengths):
@@ -11,9 +12,11 @@ def get_mask_from_lengths(lengths):
     return mask
 
 
-def load_wav_to_torch(full_path):
-    sampling_rate, data = read(full_path)
-    return torch.FloatTensor(data.astype(np.float32)), sampling_rate
+def load_wav_to_torch(full_path, sr=None):
+    data, sr = librosa.load(full_path, sr=sr)
+    data = np.clip(data, -1, 1)  # potentially out of [-1, 1] due to resampling
+    data = data * 32768.0  # match values loaded by scipy
+    return torch.FloatTensor(data.astype(np.float32)), sr
 
 
 def load_filepaths_and_text(filename, split="|"):
@@ -35,5 +38,12 @@ def load_code_dict(path):
         return {}
     with open(path, 'r') as f:
         codes = ['_'] + [line.rstrip() for line in f]
-    code_dict = {c: i for i, c in enumerate(codes)}
-    return code_dict
+    return {c: i for i, c in enumerate(codes)}
+
+
+def load_obs_label_dict(path):
+    if not path:
+        return {}
+    with open(path, 'r') as f:
+        obs_labels = [line.rstrip() for line in f]
+    return {c: i for i, c in enumerate(obs_labels)}

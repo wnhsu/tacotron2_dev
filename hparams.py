@@ -30,6 +30,7 @@ def create_parser():
     parser.add_argument('--cudnn_benchmark', type=str2bool, default=False)
     parser.add_argument('--ignore_layers', type=str, nargs='*', 
                         default=['embedding.weight'])
+    parser.add_argument('--num_workers', type=int, default=8)
     
     ################################
     # Data Parameters             #
@@ -48,6 +49,9 @@ def create_parser():
     parser.add_argument('--chunk_code', type=str2bool, default=False)
     parser.add_argument('--init_chunk', type=int, default=50, help='initial chunk size')
     parser.add_argument('--chunk_incr', type=int, default=5, help='chunk size to increase at every epoch')
+    parser.add_argument('--max_chunk', type=int, default=-1, help='-1 for no upper bound')
+    parser.add_argument('--obs_label_key', type=str, default='', help='')
+    parser.add_argument('--obs_label_dict', type=str, default='')
 
 
     ################################
@@ -61,6 +65,7 @@ def create_parser():
     parser.add_argument('--n_mel_channels', type=int, default=80)
     parser.add_argument('--mel_fmin', type=float, default=0.0)
     parser.add_argument('--mel_fmax', type=float, default=8000.0)
+    parser.add_argument('--max_wav_len', type=float, default=-1, help='max wav length in seconds allowed. -1 for no upper bound')
     
     ################################
     # Model Parameters             #
@@ -73,6 +78,17 @@ def create_parser():
     parser.add_argument('--encoder_kernel_size', type=int, default=5)
     parser.add_argument('--encoder_n_convolutions', type=int, default=3)
     parser.add_argument('--encoder_embedding_dim', type=int, default=512)
+
+    # Audio Encoder parameters
+    parser.add_argument('--lat_kernel_size', type=int, default=3)
+    parser.add_argument('--lat_n_convolutions', type=int ,default=2)
+    parser.add_argument('--lat_n_filters', type=int, default=512)
+    parser.add_argument('--lat_n_blstms', type=int, default=2)
+    parser.add_argument('--lat_dim', type=int, default=0, help='set to 0 for not using')
+
+    # Observed Label Embedding
+    parser.add_argument('--obs_n_class', type=int, default=1)
+    parser.add_argument('--obs_dim', type=int, default=64)
     
     # Decoder parameters
     parser.add_argument('--n_frames_per_step', type=int, default=1)
@@ -105,6 +121,7 @@ def create_parser():
     parser.add_argument('--grad_clip_thresh', type=float, default=1.0)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--mask_padding', type=str2bool, default=True)
+    parser.add_argument('--kld_weight', type=float, default=1.0)
     return parser
 
 def create_hparams(hparams_string='', verbose=False):

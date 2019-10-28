@@ -4,7 +4,7 @@ import torch
 import torch.utils.data
 
 import layers
-from utils import load_wav_to_torch, load_filepaths_and_text, load_code_dict
+from utils import load_wav_to_torch, load_filepaths_and_text, load_code_dict, load_obs_label_dict
 from text import text_to_sequence, code_to_sequence, sample_code_chunk
 
 
@@ -22,6 +22,8 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.code_dict = load_code_dict(hparams.code_dict)
         self.collapse_code = hparams.collapse_code
         self.chunk_code = hparams.chunk_code
+        self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
+        self.obs_label_key = hparams.obs_label_key
         self.max_raw_codes = -1
         self.max_wav_value = hparams.max_wav_value
         self.sampling_rate = hparams.sampling_rate
@@ -30,6 +32,10 @@ class TextMelLoader(torch.utils.data.Dataset):
             hparams.filter_length, hparams.hop_length, hparams.win_length,
             hparams.n_mel_channels, hparams.sampling_rate, hparams.mel_fmin,
             hparams.mel_fmax)
+        self.max_wav_nframe = -1
+        if hparams.max_wav_len > 0:
+            spf = hparams.hop_length / hparams.sampling_rate
+            self.max_wav_nframe = int(hparams.max_wav_len / spf)
         random.seed(1234)
         random.shuffle(self.data)
 
@@ -63,10 +69,10 @@ class TextMelLoader(torch.utils.data.Dataset):
 
     def get_mel(self, filename):
         if not self.load_mel_from_disk:
-            audio, sampling_rate = load_wav_to_torch(filename)
+            audio, sampling_rate = load_wav_to_torch(filename, self.sampling_rate)
             if sampling_rate != self.stft.sampling_rate:
                 raise ValueError("{} {} SR doesn't match target {} SR".format(
-                    sampling_rate, self.stft.sampling_rate))
+                    filename, sampling_rate, self.stft.sampling_rate))
             audio_norm = audio / self.max_wav_value
             audio_norm = audio_norm.unsqueeze(0)
             audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
@@ -77,6 +83,9 @@ class TextMelLoader(torch.utils.data.Dataset):
             assert melspec.size(0) == self.stft.n_mel_channels, (
                 'Mel dimension mismatch: given {}, expected {}'.format(
                     melspec.size(0), self.stft.n_mel_channels))
+
+        if self.max_wav_nframe > 0:
+            melspec = melspec[:, :self.max_wav_nframe]
 
         return melspec
 
@@ -90,7 +99,16 @@ class TextMelLoader(torch.utils.data.Dataset):
         return code_norm
 
     def __getitem__(self, index):
-        return self.get_mel_symbol_pair(self.data[index])
+        """
+        return dummy obs_label_id (0) if obs_label_key is not set.
+        """
+        symbol, mel = self.get_mel_symbol_pair(self.data[index])
+        obs_label_id = torch.tensor(0).int()
+        if self.obs_label_key:
+            obs_label = self.data[index][self.obs_label_key]
+            obs_label_id = self.obs_label_dict[obs_label]
+            obs_label_id = torch.tensor(obs_label_id).int()
+        return symbol, mel, obs_label_id
 
     def __len__(self):
         return len(self.data)
@@ -139,5 +157,10 @@ class TextMelCollate():
             gate_padded[i, mel.size(1)-1:] = 1
             output_lengths[i] = mel.size(1)
 
-        return text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths
+        # re-order observed labels
+        obs_labels = torch.LongTensor(len(batch))
+        for i in range(len(ids_sorted_decreasing)):
+            obs_labels[i] = batch[ids_sorted_decreasing[i]][2]
+
+        return (text_padded, input_lengths, obs_labels, 
+                mel_padded, gate_padded, output_lengths)

@@ -10,16 +10,18 @@ class Tacotron2Logger(SummaryWriter):
     def __init__(self, logdir):
         super(Tacotron2Logger, self).__init__(logdir)
 
-    def log_training(self, reduced_loss, grad_norm, learning_rate, duration,
-                     iteration):
+    def log_training(self, reduced_loss, grad_norm, learning_rate,
+                     data_time, batch_time, iteration):
             self.add_scalar("training.loss", reduced_loss, iteration)
             self.add_scalar("grad.norm", grad_norm, iteration)
             self.add_scalar("learning.rate", learning_rate, iteration)
-            self.add_scalar("duration", duration, iteration)
+            self.add_scalar("time.batch", batch_time, iteration)
+            self.add_scalar("time.data", data_time, iteration)
 
-    def log_validation(self, reduced_loss, model, y, y_pred, y_inf, iteration):
-        self.add_scalar("validation.loss", reduced_loss, iteration)
-        _, tf_mel_outputs, tf_gate_outputs, tf_alignments = y_pred
+    def log_validation(self, loss, kld, model, y, y_pred, y_inf, iteration):
+        self.add_scalar("validation.loss", loss, iteration)
+        self.add_scalar("validation.kld", kld, iteration)
+        _, tf_mel_outputs, tf_gate_outputs, tf_alignments, _, _ = y_pred
         _, inf_mel_outputs, _, inf_alignments = y_inf
         inf_mel_outputs = inf_mel_outputs.float()
         inf_alignments = inf_alignments.float()

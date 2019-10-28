@@ -53,8 +53,8 @@ def prepare_dataloaders(hparams):
         train_sampler = None
         shuffle = True
 
-    train_loader = DataLoader(trainset, num_workers=1, shuffle=shuffle,
-                              sampler=train_sampler,
+    train_loader = DataLoader(trainset, num_workers=hparams.num_workers,
+                              shuffle=shuffle, sampler=train_sampler,
                               batch_size=hparams.batch_size, pin_memory=False,
                               drop_last=True, collate_fn=collate_fn)
     return train_loader, valset, collate_fn
@@ -123,6 +123,7 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
              collate_fn, logger, distributed_run, rank):
     """Handles all the validation scoring and printing"""
     model.eval()
+    start = time.perf_counter()
     with torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
         val_loader = DataLoader(valset, sampler=val_sampler, num_workers=1,
@@ -130,22 +131,31 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
                                 pin_memory=False, collate_fn=collate_fn)
 
         val_loss = 0.0
+        kld_loss = 0.0
         for i, batch in enumerate(val_loader):
             x, y = model.parse_batch(batch)
             y_pred = model(x)
-            loss = criterion(y_pred, y)
+            loss, mel_loss, gate_loss, kld_loss = criterion(y_pred, y)
             if distributed_run:
                 reduced_val_loss = reduce_tensor(loss.data, n_gpus).item()
+                reduced_kld_loss = reduce_tensor(kld_loss.data, n_gpus).item()
             else:
                 reduced_val_loss = loss.item()
+                reduced_kld_loss = loss.item()
             val_loss += reduced_val_loss
+            kld_loss += reduced_kld_loss
         val_loss = val_loss / (i + 1)
+        kld_loss = kld_loss / (i + 1)
+    duration = time.perf_counter() - start
 
     model.train()
     if rank == 0:
-        print("Validation loss {}: {:9f}  ".format(iteration, reduced_val_loss))
+        print("Validation loss {}: {:9f}  ".format(iteration, val_loss))
+        print("Validation kld  {}: {:9f}  ".format(iteration, kld_loss))
+        print("Validation time {}: {:9f}  ".format(iteration, duration))
+        print("Current Time : %s" % str(time.asctime()))
         y_inf = model.inference(x[0][:1])
-        logger.log_validation(reduced_val_loss, model, y, 
+        logger.log_validation(val_loss, kld_loss, model, y,
                               y_pred, y_inf, iteration)
 
 
@@ -172,6 +182,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     learning_rate = hparams.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                                  weight_decay=hparams.weight_decay)
+    print(model)
 
     if hparams.fp16_run:
         from apex import amp
@@ -181,7 +192,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     if hparams.distributed_run:
         model = apply_gradient_allreduce(model)
 
-    criterion = Tacotron2Loss()
+    criterion = Tacotron2Loss(hparams.kld_weight)
 
     logger = prepare_directories_and_logger(
         output_directory, log_directory, rank)
@@ -211,11 +222,14 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     for epoch in range(epoch_offset, hparams.epochs):
         print("Epoch: {}".format(epoch))
         if hparams.text_or_code == 'code' and hparams.chunk_code:
-            max_chunk_size = hparams.init_chunk + epoch * hparams.chunk_incr
-            train_loader.dataset.set_max_raw_codes(max_chunk_size)
+            chunk_size = hparams.init_chunk + epoch * hparams.chunk_incr
+            if hparams.max_chunk > 0:
+                chunk_size = min(chunk_size, hparams.max_chunk)
+            train_loader.dataset.set_max_raw_codes(chunk_size)
         nbatches = len(train_loader)
+        start = time.perf_counter()
         for i, batch in enumerate(train_loader):
-            start = time.perf_counter()
+            data_time = time.perf_counter() - start
             for param_group in optimizer.param_groups:
                 param_group['lr'] = learning_rate
 
@@ -223,7 +237,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
             x, y = model.parse_batch(batch)
             y_pred = model(x)
 
-            loss = criterion(y_pred, y)
+            loss, mel_loss, gate_loss, kld_loss = criterion(y_pred, y)
             if hparams.distributed_run:
                 reduced_loss = reduce_tensor(loss.data, n_gpus).item()
             else:
@@ -245,12 +259,17 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
             optimizer.step()
 
             if not is_overflow and rank == 0:
-                duration = time.perf_counter() - start
-                print(("{:3d}-[{:4d}/{:4d}] Train loss {:7.4f}" 
-                       " Grad Norm {:7.4f} {:5.2f}s/it").format(
-                    epoch, i, nbatches, reduced_loss, grad_norm, duration))
-                logger.log_training(
-                    reduced_loss, grad_norm, learning_rate, duration, iteration)
+                batch_time = time.perf_counter() - start
+                print(("[{}] {:3d}-[{:4d}/{:4d}] Train loss {:7.4f}"
+                       " Grad Norm {:7.4f} Data Time {:5.2f}s/it"
+                       " Batch Time {:5.2f}s/it"
+                       " Txt {}  Mel {}").format(
+                    time.asctime(), epoch, i, nbatches, reduced_loss,
+                    grad_norm, data_time, batch_time,
+                    list(batch[0].size()), list(batch[3].size())),
+                    flush=True)
+                logger.log_training(reduced_loss, grad_norm, learning_rate,
+                                    data_time, batch_time, iteration)
 
             if not is_overflow and (iteration % hparams.iters_per_checkpoint == 0):
                 validate(model, criterion, valset, iteration,
@@ -263,6 +282,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                                     checkpoint_path)
 
             iteration += 1
+            start = time.perf_counter()
 
 
 if __name__ == '__main__':

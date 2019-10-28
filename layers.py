@@ -3,6 +3,7 @@ from librosa.filters import mel as librosa_mel_fn
 from audio_processing import dynamic_range_compression
 from audio_processing import dynamic_range_decompression
 from stft import STFT
+from utils import get_mask_from_lengths
 
 
 class LinearNorm(torch.nn.Module):
@@ -37,6 +38,28 @@ class ConvNorm(torch.nn.Module):
     def forward(self, signal):
         conv_signal = self.conv(signal)
         return conv_signal
+
+
+class GlobalAvgPool(torch.nn.Module):
+    def __init__(self):
+        super(GlobalAvgPool, self).__init__()
+
+    def forward(self, x, lengths=None):
+        """Average pooling across time steps (dim=1) with optionally lengths.
+        Args:
+            x: torch.Tensor of shape (N, T, ...)
+            lengths: None or torch.Tensor of shape (N,)
+            dim: dimension to pool
+        """
+        if lengths is None:
+            return x.mean(dim=1, keepdim=False)
+        else:
+            mask = get_mask_from_lengths(lengths).type(x.type()).to(x.device)
+            mask_shape = list(mask.size()) + [1 for _ in range(x.ndimension()-2)]
+            mask = mask.reshape(*mask_shape)
+            numer = (x * mask).sum(dim=1, keepdim=False)
+            denom = mask.sum(dim=1, keepdim=False)
+            return numer / denom
 
 
 class TacotronSTFT(torch.nn.Module):
