@@ -41,11 +41,10 @@ def text_to_sequence(text, cleaner_names):
   return sequence
 
 
-def sample_code_chunk(code, num):
-    if num < 0 or len(code) <= num:
-        return code, 0, len(code)
-    start = np.random.randint(len(code) - num + 1)
-    end = start + num
+def sample_code_chunk(code, size):
+    assert(size > 0 and size <= len(code))
+    start = np.random.randint(len(code) - size + 1)
+    end = start + size
     return code[start:end], start, end
 
 

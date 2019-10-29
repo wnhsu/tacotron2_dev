@@ -9,5 +9,7 @@ show_one_exp() {
 }
 
 for d in ./exps/*; do
-  show_one_exp $d
+  if [[ ! $d =~ .*finished ]] && [[ ! $d =~ .*eval ]]; then
+    show_one_exp $d
+  fi
 done

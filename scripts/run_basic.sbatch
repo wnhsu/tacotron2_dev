@@ -17,11 +17,12 @@ set -eux
 
 expdir=$1
 bs=$2
-other_args=$3
+other_hparams=$3
+other_args=$4
 
-args="batch_size=${bs},fp16_run=True,distributed_run=True"
-if [ ! -z $other_args ]; then
-  args="${args},${other_args}"
+hparams="batch_size=${bs},fp16_run=True,distributed_run=True"
+if [ ! -z $other_hparams ]; then
+  hparams="${hparams},${other_hparams}"
 fi
 
 echo "DIRECTORY: $expdir"
@@ -30,4 +31,4 @@ echo "$SLURM_JOB_ID" >> "$expdir/slurm_job_ids"
 [ -f "$expdir/${SLURM_JOB_ID}.out"  ] || \
   ln -s "$logdir/t2-basic-ljs-${SLURM_JOB_ID}.out" "$expdir/${SLURM_JOB_ID}.out"
 
-python -m multiproc train.py -o $expdir -l log --hparams="$args"
+python -m multiproc train.py -o $expdir -l log --hparams="$hparams" $other_args

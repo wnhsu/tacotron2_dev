@@ -20,7 +20,7 @@ def create_parser():
     ################################
     parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--iters_per_checkpoint', type=int, default=1000)
-    parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--seed', type=int, default=6789)
     parser.add_argument('--dynamic_loss_scaling', type=str2bool, default=True)
     parser.add_argument('--fp16_run', type=str2bool, default=False)
     parser.add_argument('--distributed_run', type=str2bool, default=False)
@@ -50,6 +50,8 @@ def create_parser():
     parser.add_argument('--init_chunk', type=int, default=50, help='initial chunk size')
     parser.add_argument('--chunk_incr', type=int, default=5, help='chunk size to increase at every epoch')
     parser.add_argument('--max_chunk', type=int, default=-1, help='-1 for no upper bound')
+    parser.add_argument('--min_chunk', type=int, default=1, help='used when always_chunk=True, can be smaller than init_chunk')
+    parser.add_argument('--always_chunk', type=str2bool, default=False)
     parser.add_argument('--obs_label_key', type=str, default='', help='')
     parser.add_argument('--obs_label_dict', type=str, default='')
 

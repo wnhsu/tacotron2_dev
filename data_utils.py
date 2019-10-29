@@ -24,7 +24,9 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.chunk_code = hparams.chunk_code
         self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
         self.obs_label_key = hparams.obs_label_key
-        self.max_raw_codes = -1
+        self.chunk_size = -1
+        self.min_chunk_size = 1
+        self.always_chunk = False
         self.max_wav_value = hparams.max_wav_value
         self.sampling_rate = hparams.sampling_rate
         self.load_mel_from_disk = hparams.load_mel_from_disk
@@ -39,11 +41,22 @@ class TextMelLoader(torch.utils.data.Dataset):
         random.seed(1234)
         random.shuffle(self.data)
 
-    def set_max_raw_codes(self, max_raw_codes):
+    def set_chunking_mode(self, always_chunk, min_chunk_size=None):
+        print('Changing always_chunk from %s to %s' % (
+              self.always_chunk, always_chunk))
+        self.always_chunk = always_chunk
+        if always_chunk and min_chunk_size is not None:
+            assert(min_chunk_size <= self.chunk_size)
+            print('Changing min_chunk_size from %d to %d' % (
+                  self.min_chunk_size, min_chunk_size))
+            self.min_chunk_size = min_chunk_size
+
+    def set_code_chunk_size(self, chunk_size):
         assert(self.text_or_code == 'code')
+        assert(chunk_size > 0)
         print('Changing max code-chunk size from %d to %d' % (
-              self.max_raw_codes, max_raw_codes))
-        self.max_raw_codes = max_raw_codes
+              self.chunk_size, chunk_size))
+        self.chunk_size = chunk_size
 
     def get_mel_symbol_pair(self, datum):
         if self.text_or_code == 'text':
@@ -52,7 +65,16 @@ class TextMelLoader(torch.utils.data.Dataset):
             code = datum[self.code_key].split()
             if self.chunk_code:
                 tot = len(code)
-                code, start, end = sample_code_chunk(code, self.max_raw_codes)
+                if self.chunk_size == -1:
+                    chunk_size = tot
+                else:
+                    chunk_size = min(self.chunk_size, tot)
+
+                if self.always_chunk:
+                    min_chunk_size = min(self.min_chunk_size, chunk_size)
+                    chunk_size = np.random.randint(min_chunk_size,
+                                                   chunk_size + 1)
+                code, start, end = sample_code_chunk(code, chunk_size)
             symbol = self.get_code(code)
         else:
             raise ValueError('%s not supported' % self.text_or_code)
