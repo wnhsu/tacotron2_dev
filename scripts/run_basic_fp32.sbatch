@@ -1,5 +1,5 @@
 #!/bin/bash 
-#SBATCH --partition=titanx
+#SBATCH --partition=sm
 #SBATCH --gres=gpu:2
 #SBATCH -c 4
 #SBATCH -n 1
@@ -20,7 +20,7 @@ bs=$2
 other_hparams=$3
 other_args=$4
 
-hparams="batch_size=${bs},fp16_run=True,distributed_run=True"
+hparams="batch_size=${bs},fp16_run=False,distributed_run=True"
 if [ ! -z $other_hparams ]; then
   hparams="${hparams},${other_hparams}"
 fi
