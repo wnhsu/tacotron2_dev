@@ -435,14 +435,19 @@ class Decoder(nn.Module):
 
         self.attention_weights_cum += self.attention_weights
         decoder_input = torch.cat(
-            (self.attention_hidden, self.attention_context, self.obs_and_lat), -1)
+            (self.attention_hidden, self.attention_context), -1)
+        if self.obs_and_lat is not None:
+            decoder_input = torch.cat((decoder_input, self.obs_and_lat), -1)
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
             decoder_input, (self.decoder_hidden, self.decoder_cell))
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training)
 
         decoder_hidden_attention_context = torch.cat(
-            (self.decoder_hidden, self.attention_context, self.obs_and_lat), dim=1)
+            (self.decoder_hidden, self.attention_context), dim=1)
+        if self.obs_and_lat is not None:
+            decoder_hidden_attention_context = torch.cat(
+                    (decoder_hidden_attention_context, self.obs_and_lat), dim=1)
         decoder_output = self.linear_projection(
             decoder_hidden_attention_context)
 
@@ -543,11 +548,13 @@ class Tacotron2(nn.Module):
         self.embedding.weight.data.uniform_(-val, val)
 
         # initialize observed attribute embedding
-        self.obs_embedding = nn.Embedding(
-            hparams.obs_n_class, hparams.obs_dim)
-        std = sqrt(2.0 / (hparams.obs_n_class + hparams.obs_dim))
-        val = sqrt(3.0) * std  # uniform bounds for std
-        self.obs_embedding.weight.data.uniform_(-val, val)
+        self.obs_embedding = None
+        if hparams.obs_dim > 0:
+            self.obs_embedding = nn.Embedding(
+                hparams.obs_n_class, hparams.obs_dim)
+            std = sqrt(2.0 / (hparams.obs_n_class + hparams.obs_dim))
+            val = sqrt(3.0) * std  # uniform bounds for std
+            self.obs_embedding.weight.data.uniform_(-val, val)
 
         self.encoder = Encoder(hparams)
         self.decoder = Decoder(hparams)
@@ -594,11 +601,19 @@ class Tacotron2(nn.Module):
 
         encoder_outputs = self.encoder(embedded_inputs, text_lengths)
 
-        obs_and_lat = self.obs_embedding(obs_labels)
-        lat_mu, lat_logvar = None, None
+        obs = None
+        if self.obs_embedding is not None:
+            obs = self.obs_embedding(obs_labels)
+
+        lat, lat_mu, lat_logvar = None, None, None
         if self.lat_encoder is not None:
             (lat, lat_mu, lat_logvar) = self.lat_encoder(mels, output_lengths)
-            obs_and_lat = torch.cat([obs_and_lat, lat], dim=-1)
+
+        obs_and_lat = [x for x in [obs, lat] if x is not None]
+        if bool(obs_and_lat):
+            obs_and_lat = torch.cat(obs_and_lat, dim=-1)
+        else:
+            obs_and_lat = None
 
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, obs_and_lat, mels, memory_lengths=text_lengths)
@@ -618,13 +633,21 @@ class Tacotron2(nn.Module):
         if obs_labels is None:
             obs_labels = torch.LongTensor(len(inputs))
             obs_labels = obs_labels.to(inputs.device).zero_()
-        obs_and_lat = self.obs_embedding(obs_labels)
+
+        obs = None
+        if self.obs_embedding is not None:
+            obs = self.obs_embedding(obs_labels)
 
         if self.lat_encoder is not None:
             if lat is None:
                 lat = torch.FloatTensor(len(inputs), self.lat_encoder.lat_dim)
                 lat = lat.to(inputs.device).zero_().type(obs_and_lat.type())
-            obs_and_lat = torch.cat([obs_and_lat, lat], dim=-1)
+
+        obs_and_lat = [x for x in [obs, lat] if x is not None]
+        if bool(obs_and_lat):
+            obs_and_lat = torch.cat(obs_and_lat, dim=-1)
+        else:
+            obs_and_lat = None
 
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
             encoder_outputs, obs_and_lat)
