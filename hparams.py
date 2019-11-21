@@ -90,7 +90,7 @@ def create_parser():
 
     # Observed Label Embedding
     parser.add_argument('--obs_n_class', type=int, default=1)
-    parser.add_argument('--obs_dim', type=int, default=64)
+    parser.add_argument('--obs_dim', type=int, default=0)
     
     # Decoder parameters
     parser.add_argument('--n_frames_per_step', type=int, default=1)

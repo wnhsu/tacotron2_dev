@@ -641,7 +641,7 @@ class Tacotron2(nn.Module):
         if self.lat_encoder is not None:
             if lat is None:
                 lat = torch.FloatTensor(len(inputs), self.lat_encoder.lat_dim)
-                lat = lat.to(inputs.device).zero_().type(obs_and_lat.type())
+                lat = lat.to(inputs.device).zero_().type(encoder_outputs.type())
 
         obs_and_lat = [x for x in [obs, lat] if x is not None]
         if bool(obs_and_lat):

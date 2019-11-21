@@ -18,15 +18,18 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.data = load_filepaths_and_text(audiopaths_and_text)
         self.text_or_code = hparams.text_or_code
         self.text_cleaners = hparams.text_cleaners
+
+        # options for using code
         self.code_key = hparams.code_key
         self.code_dict = load_code_dict(hparams.code_dict)
         self.collapse_code = hparams.collapse_code
         self.chunk_code = hparams.chunk_code
-        self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
-        self.obs_label_key = hparams.obs_label_key
         self.chunk_size = -1
         self.min_chunk_size = 1
         self.always_chunk = False
+
+        self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
+        self.obs_label_key = hparams.obs_label_key
         self.max_wav_value = hparams.max_wav_value
         self.sampling_rate = hparams.sampling_rate
         self.load_mel_from_disk = hparams.load_mel_from_disk
@@ -34,10 +37,14 @@ class TextMelLoader(torch.utils.data.Dataset):
             hparams.filter_length, hparams.hop_length, hparams.win_length,
             hparams.n_mel_channels, hparams.sampling_rate, hparams.mel_fmin,
             hparams.mel_fmax)
-        self.max_wav_nframe = -1
+
         if hparams.max_wav_len > 0:
-            spf = hparams.hop_length / hparams.sampling_rate
-            self.max_wav_nframe = int(hparams.max_wav_len / spf)
+            ori_num_utts = len(self.data)
+            self.data = [d for d in self.data \
+                         if d['duration'] <= hparams.max_wav_len]
+            print('Keep %d / %d utterances <= %s seconds' % (
+                    len(self.data), ori_num_utts, hparams.max_wav_len))
+
         random.seed(1234)
         random.shuffle(self.data)
 
@@ -105,9 +112,6 @@ class TextMelLoader(torch.utils.data.Dataset):
             assert melspec.size(0) == self.stft.n_mel_channels, (
                 'Mel dimension mismatch: given {}, expected {}'.format(
                     melspec.size(0), self.stft.n_mel_channels))
-
-        if self.max_wav_nframe > 0:
-            melspec = melspec[:, :self.max_wav_nframe]
 
         return melspec
 
