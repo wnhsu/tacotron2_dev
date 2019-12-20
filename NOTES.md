@@ -42,6 +42,9 @@ srun --gres=gpu:2 -p sm,2080,titanx \
 * AE/VAE formulation for the objective
 * pass speaker ID as input to the model
 * infer global voice representations with an audio encoder
+* do not concat obs emb if dim set to 0
+* add duration info into filelist, used for pre-filtering
+* pre-/post-pend sos eos token for chunking
 
 ### Experiment TODOs
 1. Train on LJSpeech with the original code

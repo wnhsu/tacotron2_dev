@@ -19,7 +19,7 @@ def load_wav_to_torch(full_path, sr=None):
     return torch.FloatTensor(data.astype(np.float32)), sr
 
 
-def load_filepaths_and_text(filename, split="|"):
+def load_filepaths_and_text(filename):
     with open(filename, encoding='utf-8') as f:
         data = [json.loads(line.rstrip()) for line in f]
     return data
@@ -37,7 +37,7 @@ def load_code_dict(path):
     if not path:
         return {}
     with open(path, 'r') as f:
-        codes = ['_'] + [line.rstrip() for line in f]
+        codes = ['_'] + [line.rstrip() for line in f]  # '_' for pad
     return {c: i for i, c in enumerate(codes)}
 
 

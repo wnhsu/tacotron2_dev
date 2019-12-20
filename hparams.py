@@ -52,6 +52,8 @@ def create_parser():
     parser.add_argument('--max_chunk', type=int, default=-1, help='-1 for no upper bound')
     parser.add_argument('--min_chunk', type=int, default=1, help='used when always_chunk=True, can be smaller than init_chunk')
     parser.add_argument('--always_chunk', type=str2bool, default=False)
+    parser.add_argument('--add_sos', type=str2bool, default=False)
+    parser.add_argument('--add_eos', type=str2bool, default=False)
     parser.add_argument('--obs_label_key', type=str, default='', help='')
     parser.add_argument('--obs_label_dict', type=str, default='')
 

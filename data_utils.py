@@ -5,7 +5,7 @@ import torch.utils.data
 
 import layers
 from utils import load_wav_to_torch, load_filepaths_and_text, load_code_dict, load_obs_label_dict
-from text import text_to_sequence, code_to_sequence, sample_code_chunk
+from text import text_to_sequence, code_to_sequence, sample_code_chunk, SOS_TOK, EOS_TOK
 
 
 class TextMelLoader(torch.utils.data.Dataset):
@@ -27,6 +27,17 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.chunk_size = -1
         self.min_chunk_size = 1
         self.always_chunk = False
+        self.add_sos = hparams.add_sos
+        self.add_eos = hparams.add_eos
+        if self.add_sos or self.add_eos:
+            if self.text_or_code == 'text':
+                raise ValueError('sos/eos is only supported for code inputs')
+            if self.add_sos:
+                self.code_dict[SOS_TOK] = len(self.code_dict)
+            if self.add_eos:
+                self.code_dict[EOS_TOK] = len(self.code_dict)
+            assert(set(self.code_dict.values()) ==
+                   set(range(len(self.code_dict))))
 
         self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
         self.obs_label_key = hparams.obs_label_key
@@ -82,6 +93,10 @@ class TextMelLoader(torch.utils.data.Dataset):
                     chunk_size = np.random.randint(min_chunk_size,
                                                    chunk_size + 1)
                 code, start, end = sample_code_chunk(code, chunk_size)
+            if self.add_sos:
+                code = [SOS_TOK] + code
+            if self.add_eos:
+                code = code + [EOS_TOK]
             symbol = self.get_code(code)
         else:
             raise ValueError('%s not supported' % self.text_or_code)
