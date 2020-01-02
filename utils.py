@@ -3,6 +3,7 @@ import librosa
 import numpy as np
 import torch
 from scipy.io.wavfile import read
+from text import SOS_TOK, EOS_TOK
 
 
 def get_mask_from_lengths(lengths):
@@ -33,12 +34,21 @@ def to_gpu(x):
     return torch.autograd.Variable(x)
 
 
-def load_code_dict(path):
+def load_code_dict(path, add_sos=False, add_eos=False):
     if not path:
         return {}
+
     with open(path, 'r') as f:
         codes = ['_'] + [line.rstrip() for line in f]  # '_' for pad
-    return {c: i for i, c in enumerate(codes)}
+    code_dict = {c: i for i, c in enumerate(codes)}
+
+    if add_sos:
+        code_dict[SOS_TOK] = len(code_dict)
+    if add_eos:
+        code_dict[EOS_TOK] = len(code_dict)
+    assert(set(code_dict.values()) == set(range(len(code_dict))))
+
+    return code_dict
 
 
 def load_obs_label_dict(path):

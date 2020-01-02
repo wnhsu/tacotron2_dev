@@ -21,7 +21,8 @@ class TextMelLoader(torch.utils.data.Dataset):
 
         # options for using code
         self.code_key = hparams.code_key
-        self.code_dict = load_code_dict(hparams.code_dict)
+        self.code_dict = load_code_dict(hparams.code_dict, hparams.add_sos,
+                                        hparams.add_eos)
         self.collapse_code = hparams.collapse_code
         self.chunk_code = hparams.chunk_code
         self.chunk_size = -1
@@ -29,15 +30,8 @@ class TextMelLoader(torch.utils.data.Dataset):
         self.always_chunk = False
         self.add_sos = hparams.add_sos
         self.add_eos = hparams.add_eos
-        if self.add_sos or self.add_eos:
-            if self.text_or_code == 'text':
-                raise ValueError('sos/eos is only supported for code inputs')
-            if self.add_sos:
-                self.code_dict[SOS_TOK] = len(self.code_dict)
-            if self.add_eos:
-                self.code_dict[EOS_TOK] = len(self.code_dict)
-            assert(set(self.code_dict.values()) ==
-                   set(range(len(self.code_dict))))
+        if (self.add_sos or self.add_eos) and self.text_or_code == 'text':
+            raise ValueError('sos/eos is only supported for code inputs')
 
         self.obs_label_dict = load_obs_label_dict(hparams.obs_label_dict)
         self.obs_label_key = hparams.obs_label_key
