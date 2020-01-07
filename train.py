@@ -260,6 +260,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                     model.parameters(), hparams.grad_clip_thresh)
 
             optimizer.step()
+            iteration += 1
 
             if not is_overflow and rank == 0:
                 batch_time = time.perf_counter() - start
@@ -267,7 +268,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                        " Grad Norm {:7.4f} Data Time {:5.2f}s/it"
                        " Batch Time {:5.2f}s/it"
                        " Txt {}  Mel {}").format(
-                    time.asctime(), epoch, i, nbatches, reduced_loss,
+                    time.asctime(), epoch+1, i+1, nbatches, reduced_loss,
                     grad_norm, data_time, batch_time,
                     list(batch[0].size()), list(batch[3].size())),
                     flush=True)
@@ -284,7 +285,6 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                     save_checkpoint(model, optimizer, learning_rate, iteration,
                                     checkpoint_path)
 
-            iteration += 1
             start = time.perf_counter()
 
 
