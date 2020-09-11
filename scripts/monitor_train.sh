@@ -3,9 +3,9 @@
 show_one_exp() {
   d=$1
   echo ""; 
-  echo "####### $d"; 
   # ls -v $d/*.out | tail -1 | xargs -I{} bash -c "grep 'Train loss' {} | tail -n5 | head -n4"; 
-  ls -v $d/*.out | tail -1 | xargs -I{} bash -c "tail -n5 {}"; 
+  ls -v $d/*.out | tail -1 | xargs -I{} bash -c "echo '##### {}'"; 
+  ls -v $d/*.out | tail -1 | xargs -I{} bash -c "tail -n10 {}"; 
 }
 
 for d in ./exps/*; do
