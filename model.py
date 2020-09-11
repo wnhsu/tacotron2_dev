@@ -492,7 +492,7 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def inference(self, memory, obs_and_lat):
+    def inference(self, memory, obs_and_lat, ret_has_eos=False):
         """ Decoder inference
         PARAMS
         ------
@@ -510,6 +510,7 @@ class Decoder(nn.Module):
         self.initialize_decoder_states(memory, obs_and_lat, mask=None)
 
         mel_outputs, gate_outputs, alignments = [], [], []
+        has_eos = False
         while True:
             decoder_input = self.prenet(decoder_input)
             mel_output, gate_output, alignment = self.decode(decoder_input)
@@ -519,9 +520,10 @@ class Decoder(nn.Module):
             alignments += [alignment]
 
             if torch.sigmoid(gate_output.data) > self.gate_threshold:
+                has_eos = True
                 break
             elif len(mel_outputs) == self.max_decoder_steps:
-                print("Warning! Reached max decoder steps")
+                # print("Warning! Reached max decoder steps")
                 break
 
             decoder_input = mel_output
@@ -529,7 +531,10 @@ class Decoder(nn.Module):
         mel_outputs, gate_outputs, alignments = self.parse_decoder_outputs(
             mel_outputs, gate_outputs, alignments)
 
-        return mel_outputs, gate_outputs, alignments
+        if ret_has_eos:
+            return mel_outputs, gate_outputs, alignments, has_eos
+        else:
+            return mel_outputs, gate_outputs, alignments
 
 
 class Tacotron2(nn.Module):
@@ -626,7 +631,7 @@ class Tacotron2(nn.Module):
              lat_mu, lat_logvar],
             output_lengths)
 
-    def inference(self, inputs, obs_labels=None, lat=None):
+    def inference(self, inputs, obs_labels=None, lat=None, ret_has_eos=False):
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
 
@@ -649,8 +654,8 @@ class Tacotron2(nn.Module):
         else:
             obs_and_lat = None
 
-        mel_outputs, gate_outputs, alignments = self.decoder.inference(
-            encoder_outputs, obs_and_lat)
+        mel_outputs, gate_outputs, alignments, has_eos = self.decoder.inference(
+            encoder_outputs, obs_and_lat, ret_has_eos=True)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
@@ -658,4 +663,7 @@ class Tacotron2(nn.Module):
         outputs = self.parse_output(
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments])
 
-        return outputs
+        if ret_has_eos:
+            return outputs + [has_eos]
+        else:
+            return outputs

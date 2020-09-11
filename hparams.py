@@ -19,7 +19,7 @@ def create_parser():
     # Experiment Parameters        #
     ################################
     parser.add_argument('--epochs', type=int, default=500)
-    parser.add_argument('--iters_per_checkpoint', type=int, default=1000)
+    parser.add_argument('--iters_per_checkpoint', type=int, default=5000)
     parser.add_argument('--seed', type=int, default=6789)
     parser.add_argument('--dynamic_loss_scaling', type=str2bool, default=True)
     parser.add_argument('--fp16_run', type=str2bool, default=False)
@@ -38,8 +38,12 @@ def create_parser():
     parser.add_argument('--load_mel_from_disk', type=str2bool, default=False)
     parser.add_argument('--training_files', type=str, 
                         default='filelists/ljs_audio_text_train_filelist.txt')
+    parser.add_argument('--training_wav_h5', type=str, default='')
+    parser.add_argument('--training_wav_path2idx', type=str, default='')
     parser.add_argument('--validation_files', type=str, 
                         default='filelists/ljs_audio_text_val_filelist.txt')
+    parser.add_argument('--validation_wav_h5', type=str, default='')
+    parser.add_argument('--validation_wav_path2idx', type=str, default='')
     parser.add_argument('--text_cleaners', type=str, nargs='*', 
                         default=['english_cleaners'])
     parser.add_argument('--text_or_code', type=str, default='text')

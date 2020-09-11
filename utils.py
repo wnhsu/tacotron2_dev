@@ -1,6 +1,8 @@
+import io
 import json
 import librosa
 import numpy as np
+import soundfile as sf
 import torch
 from scipy.io.wavfile import read
 from text import SOS_TOK, EOS_TOK
@@ -18,6 +20,26 @@ def load_wav_to_torch(full_path, sr=None):
     data = np.clip(data, -1, 1)  # potentially out of [-1, 1] due to resampling
     data = data * 32768.0  # match values loaded by scipy
     return torch.FloatTensor(data.astype(np.float32)), sr
+
+
+def read_binary_audio(bin_data, tar_sr=None):
+    """
+    read binary audio (`bytes` or `uint8` `numpy.ndarray`) to `float32`
+    `numpy.ndarray`
+
+    RETURNS:
+        data (np.ndarray) : audio of shape (n,) or (2, n)
+        tar_sr (int) : sample rate
+    """
+    data, ori_sr = sf.read(io.BytesIO(bin_data), dtype='float32')
+    data = data.T
+    if (tar_sr is not None) and (ori_sr != tar_sr):
+        data = librosa.resample(data, ori_sr, tar_sr)
+    else:
+        tar_sr = ori_sr
+    data = np.clip(data, -1, 1)
+    data = data * 32768.0
+    return torch.FloatTensor(data.astype(np.float32)), tar_sr
 
 
 def load_filepaths_and_text(filename):

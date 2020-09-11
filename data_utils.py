@@ -1,11 +1,16 @@
+import h5py
+import json
 import random
 import numpy as np
 import torch
 import torch.utils.data
 
 import layers
-from utils import load_wav_to_torch, load_filepaths_and_text, load_code_dict, load_obs_label_dict
-from text import text_to_sequence, code_to_sequence, sample_code_chunk, SOS_TOK, EOS_TOK
+from utils import (load_wav_to_torch, read_binary_audio,
+                   load_filepaths_and_text, load_code_dict,
+                   load_obs_label_dict)
+from text import (text_to_sequence, code_to_sequence, sample_code_chunk,
+                  SOS_TOK, EOS_TOK)
 
 
 class TextMelLoader(torch.utils.data.Dataset):
@@ -14,8 +19,16 @@ class TextMelLoader(torch.utils.data.Dataset):
         2) normalizes text and converts them to sequences of one-hot vectors
         3) computes mel-spectrograms from audio files.
     """
-    def __init__(self, audiopaths_and_text, hparams):
+    def __init__(self, audiopaths_and_text, hparams,
+                 wav_h5_path='', wav_path2idx_path=''):
         self.data = load_filepaths_and_text(audiopaths_and_text)
+        self.wav_h5 = None
+        self.wav_h5_path = wav_h5_path
+        self.wav_path2idx = None
+        if bool(wav_h5_path) and bool(wav_path2idx_path):
+            print('will load wav from h5 file %s' % wav_h5_path)
+            self.wav_path2idx = json.load(open(wav_path2idx_path))
+
         self.text_or_code = hparams.text_or_code
         self.text_cleaners = hparams.text_cleaners
 
@@ -48,7 +61,7 @@ class TextMelLoader(torch.utils.data.Dataset):
             self.data = [d for d in self.data \
                          if d['duration'] <= hparams.max_wav_len]
             print('Keep %d / %d utterances <= %s seconds' % (
-                    len(self.data), ori_num_utts, hparams.max_wav_len))
+                  len(self.data), ori_num_utts, hparams.max_wav_len))
 
         random.seed(1234)
         random.shuffle(self.data)
@@ -107,13 +120,22 @@ class TextMelLoader(torch.utils.data.Dataset):
 
     def get_mel(self, filename):
         if not self.load_mel_from_disk:
-            audio, sampling_rate = load_wav_to_torch(filename, self.sampling_rate)
+            if self.wav_path2idx is not None:
+                # lazy init for multi-worker loader
+                if self.wav_h5 is None:
+                    print('creating h5 reader')
+                    self.wav_h5 = h5py.File(self.wav_h5_path, 'r')
+                bin_aud = self.wav_h5['audio'][self.wav_path2idx[filename]]
+                audio, sampling_rate = read_binary_audio(bin_aud,
+                                                         self.sampling_rate)
+            else:
+                audio, sampling_rate = load_wav_to_torch(filename,
+                                                         self.sampling_rate)
             if sampling_rate != self.stft.sampling_rate:
                 raise ValueError("{} {} SR doesn't match target {} SR".format(
                     filename, sampling_rate, self.stft.sampling_rate))
             audio_norm = audio / self.max_wav_value
             audio_norm = audio_norm.unsqueeze(0)
-            audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
             melspec = self.stft.mel_spectrogram(audio_norm)
             melspec = torch.squeeze(melspec, 0)
         else:
@@ -121,7 +143,6 @@ class TextMelLoader(torch.utils.data.Dataset):
             assert melspec.size(0) == self.stft.n_mel_channels, (
                 'Mel dimension mismatch: given {}, expected {}'.format(
                     melspec.size(0), self.stft.n_mel_channels))
-
         return melspec
 
     def get_text(self, text):
@@ -197,5 +218,5 @@ class TextMelCollate():
         for i in range(len(ids_sorted_decreasing)):
             obs_labels[i] = batch[ids_sorted_decreasing[i]][2]
 
-        return (text_padded, input_lengths, obs_labels, 
+        return (text_padded, input_lengths, obs_labels,
                 mel_padded, gate_padded, output_lengths)
